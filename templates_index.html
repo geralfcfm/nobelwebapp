@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Premios Nobel</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body {
+            padding: 20px;
+            font-family: Arial, sans-serif;
+        }
+        .chart-container {
+            position: relative;
+            height: 400px;
+            margin-bottom: 30px;
+        }
+        .nobel-card {
+            margin-bottom: 15px;
+            border-radius: 5px;
+            padding: 15px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        .loading {
+            text-align: center;
+            padding: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1 class="text-center mb-4">Premios Nobel</h1>
+        
+        <div class="row mb-4">
+            <div class="col-md-12">
+                <h2>Ganadores por País</h2>
+                <div class="chart-container">
+                    <canvas id="countryChart"></canvas>
+                </div>
+            </div>
+        </div>
+        
+        <div class="row mb-4">
+            <div class="col-md-12">
+                <h2>5 Ganadores Aleatorios</h2>
+                <button id="loadWinnersBtn" class="btn btn-primary mb-3">Cargar Ganadores</button>
+                <div id="winnersList" class="row">
+                    <div class="loading">Haga clic en el botón para cargar ganadores...</div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="row">
+            <div class="col-md-12">
+                <h2>Categorías por País (Extra)</h2>
+                <button id="loadCategoriesBtn" class="btn btn-success mb-3">Cargar Categorías por País</button>
+                <div class="chart-container">
+                    <canvas id="categoriesChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Función para cargar el gráfico de ganadores por país
+        function loadCountryChart() {
+            fetch('/api/winners_by_country')
+                .then(response => response.json())
+                .then(data => {
+                    const ctx = document.getElementById('countryChart').getContext('2d');
+                    
+                    // Limitar a los 10 principales países para mejor visualización
+                    const topCountries = data.countries.slice(0, 10);
+                    const topCounts = data.counts.slice(0, 10);
+                    
+                    new Chart(ctx, {
+                        type: 'bar',
+                        data: {
+                            labels: topCountries,
+                            datasets: [{
+                                label: 'Número de Ganadores',
+                                data: topCounts,
+                                backgroundColor: 'rgba(54, 162, 235, 0.5)',
+                                borderColor: 'rgba(54, 162, 235, 1)',
+                                borderWidth: 1
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            scales: {
+                                y: {
+                                    beginAtZero: true,
+                                    title: {
+                                        display: true,
+                                        text: 'Número de Ganadores'
+                                    }
+                                },
+                                x: {
+                                    title: {
+                                        display: true,
+                                        text: 'País'
+                                    }
+                                }
+                            }
+                        }
+                    });
+                })
+                .catch(error => console.error('Error al cargar datos de países:', error));
+        }
+        
+        // Función para cargar ganadores aleatorios (AJAX)
+        document.getElementById('loadWinnersBtn').addEventListener('click', function() {
+            const winnersList = document.getElementById('winnersList');
+            winnersList.innerHTML = '<div class="loading">Cargando ganadores...</div>';
+            
+            fetch('/api/random_nobel_winners')
+                .then(response => response.json())
+                .then(winners => {
+                    winnersList.innerHTML = '';
+                    
+                    winners.forEach(winner => {
+                        const card = document.createElement('div');
+                        card.className = 'col-md-6 mb-3';
+                        
+                        card.innerHTML = `
+                            <div class="nobel-card">
+                                <h4>${winner.name}</h4>
+                                <p><strong>Categoría:</strong> ${winner.category}</p>
+                                <p><strong>Año:</strong> ${winner.year}</p>
+                                <p><strong>País:</strong> ${winner.country || winner.born_in || 'No especificado'}</p>
+                            </div>
+                        `;
+                        
+                        winnersList.appendChild(card);
+                    });
+                })
+                .catch(error => {
+                    console.error('Error al cargar ganadores:', error);
+                    winnersList.innerHTML = '<div class="alert alert-danger">Error al cargar los datos</div>';
+                });
+        });
+        
+        // Función para cargar el gráfico de categorías por país (Punto extra)
+        document.getElementById('loadCategoriesBtn').addEventListener('click', function() {
+            fetch('/api/categories_by_country')
+                .then(response => response.json())
+                .then(data => {
+                    // Seleccionar los 5 principales países
+                    const topCountries = Object.keys(data).slice(0, 5);
+                    
+                    // Obtener todas las categorías únicas
+                    const allCategories = new Set();
+                    topCountries.forEach(country => {
+                        Object.keys(data[country]).forEach(category => {
+                            allCategories.add(category);
+                        });
+                    });
+                    const categories = Array.from(allCategories);
+                    
+                    // Preparar los datos para el gráfico
+                    const datasets = categories.map(category => {
+                        const categoryData = topCountries.map(country => {
+                            return data[country][category] || 0;
+                        });
+                        
+                        // Asignar un color aleatorio para cada categoría
+                        const r = Math.floor(Math.random() * 255);
+                        const g = Math.floor(Math.random() * 255);
+                        const b = Math.floor(Math.random() * 255);
+                        
+                        return {
+                            label: category,
+                            data: categoryData,
+                            backgroundColor: `rgba(${r}, ${g}, ${b}, 0.5)`,
+                            borderColor: `rgba(${r}, ${g}, ${b}, 1)`,
+                            borderWidth: 1
+                        };
+                    });
+                    
+                    const ctx = document.getElementById('categoriesChart').getContext('2d');
+                    new Chart(ctx, {
+                        type: 'bar',
+                        data: {
+                            labels: topCountries,
+                            datasets: datasets
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            scales: {
+                                y: {
+                                    beginAtZero: true,
+                                    stacked: true,
+                                    title: {
+                                        display: true,
+                                        text: 'Número de Ganadores'
+                                    }
+                                },
+                                x: {
+                                    stacked: true,
+                                    title: {
+                                        display: true,
+                                        text: 'País'
+                                    }
+                                }
+                            }
+                        }
+                    });
+                })
+                .catch(error => console.error('Error al cargar categorías por país:', error));
+        });
+        
+        // Cargar el gráfico principal al cargar la página
+        document.addEventListener('DOMContentLoaded', loadCountryChart);
+    </script>
+</body>
+</html>
